@@ -1,34 +1,45 @@
 require 'elasticsearch'
 require 'json'
-require 'pry'
 
 save_like_json = true
 url_from = 'http://localhost:9200'
 url_to = 'http://localhost:9201'
 old_name = "pokedex"
 new_name = "new_pokedex"
+add_aliases = true
 
 # Connect to elasticsearch from url
-client_from = Elasticsearch::Client.new url: 'http://localhost:9200'
-# client_to = Elasticsearch::Client.new url: url_to
-# client_to.cluster.health
+client_from = Elasticsearch::Client.new url: url_from
+client_to = Elasticsearch::Client.new url: url_to
 
 # get index and information about index from client
 # if there is some error it put message error
-begin
-  index = client_from.indices.get(index: old_name)
-rescue Exception => e
-  puts e.message
-end
+# index is hash with hashes aliases, mappings, settings
+old_index = client_from.indices.get(index: old_name)[old_name]
 
-# save properties of index like json
-if save_like_json
-  File.open("#{old_name}.json","w") do |f|
-    f.write(index[old_name].to_json)
+# create new index
+time_stamp = DateTime.now.strftime("%Y%m%d%H%M%S")
+client_to.indices.create index: "#{new_name}_#{time_stamp}"
+
+# add alieases
+if add_aliases
+  old_index["aliases"].each do |name_alias|
+    client_to.indices.put_alias index: "#{new_name}_#{time_stamp}", name:name_alias, body: old_index["aliases"][name_alias]
   end
 end
 
-# save data like json
+# mapping
+# string + not_analyzed -> keyword + index: true
+# string + analyzed -> text + index: true
+
+# save properties of new index like json
+if save_like_json
+  File.open("#{new_name}_#{time_stamp}.json","w") do |f|
+    f.write(old_index.to_json)
+  end
+end
+
+# save data from old index like json
 if save_like_json
   File.open("#{old_name}-data.json","w") do |f|
     i = 1
@@ -44,12 +55,3 @@ if save_like_json
     end
   end
 end
-
-binding.pry
-
-# create new index
-puts client_from.indices.create index: "#{new_name}_#{DateTime.now.strftime("%Y%m%d%H%M%S")}"
-
-#ms = client_from.indices.get(index: "#{new_name}_")["#{new_name}_"]["settings"]["index"]["creation_date"]
-#DateTime.strptime(ms,'%Q')
-#{DateTime.now.strftime("%Y%m%d%H%M%S")}
