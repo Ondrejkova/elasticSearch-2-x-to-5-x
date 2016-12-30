@@ -1,7 +1,7 @@
+require 'elasticsearch'
 require 'json'
 require 'yaml'
 require './dfs.rb'
-
 # loading of parameters of script's setting
 config = YAML.load_file('./config.yaml')
 
@@ -17,14 +17,16 @@ add_aliases = config["config"]["add_aliases"]
 client_from = Elasticsearch::Client.new(url: url_from)
 client_to = Elasticsearch::Client.new(url: url_to)
 
-
 # CREATE WITH SETTING
 # create new index with setting of old index
 # use DateTime like time stamp with format YYYYMMDDHHMMSS
 time_stamp = DateTime.now.strftime("%Y%m%d%H%M%S")
 new_name_with_time = "#{new_name}_#{time_stamp}"
-old_setting = client_from.indices.get_settings(index: old_name)[old_name]["settings"]
-client_from.indices.create( index: new_name_with_time, body: old_setting )
+old_setting = client_from.indices.get_settings(index: old_name)[old_name]
+old_setting["settings"]["index"].delete("creation_date")
+old_setting["settings"]["index"].delete("uuid")
+old_setting["settings"]["index"].delete("version")
+client_to.indices.create(index: new_name_with_time, body: old_setting)
 
 # MAPPING
 # change mapping from 2.x to 5.x and add to new_index
@@ -44,7 +46,7 @@ if add_aliases
   # get aliases of old index from web
   aliases = client_from.indices.get_aliases(index: old_name)[old_name]["aliases"]
   # add aliases to new index
-  aliases.each do |name_alias|
+  aliases.keys.each do |name_alias|
     client_to.indices.put_alias( index: new_name_with_time, name: name_alias, body: aliases[name_alias])
   end
 end
@@ -53,7 +55,7 @@ end
 # save properties of new index like json
 if save_like_json
   # get new index from web
-  new_index = client_from.indices.get(index: new_name_with_time)[new_name_with_time]
+  new_index = client_to.indices.get(index: new_name_with_time)[new_name_with_time]
   # write to file with name of new index and time stamp
   File.write("#{new_name_with_time}.json", new_index.to_json)
 end

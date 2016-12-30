@@ -17,8 +17,8 @@ config:
   # name of new index like 'new-index'
   new_name: "new_test"
 
-  # host where old index takes place like 'http://localhost:9200'
-  url_to: 'http://localhost:9200'
+  # host where old index takes place like 'http://localhost:9201'
+  url_to: 'http://localhost:9201'
 
   # add old aliases to new index or not
   add_aliases: true
