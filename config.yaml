@@ -1,0 +1,27 @@
+# This is yaml file, where you can defined basic parameters of ruby script
+# elasticssearch-2-x-mapping-5-x.rb
+# You must defined:
+#   - old_name ... String that defines name of old index (version 2.x)
+#   - url_from ... String that defines url of host, where is old index take place
+#   - new_name ... String that defines name of new index (version 5.x), after cteate there was add time stamp with date of create like '_YYYYMMDDHHMMSS'
+#   - url_to ... String that defines url of host, where is new index will be created
+#   - add_aliases ... Boolean that defines if you want to add aliasses from old index in new index
+#   - save_like_json ... Boolean that defines if you want to save new index like JSON
+config:
+  # name of old index like 'old-index'
+  old_name: "test"
+
+  # host where old index takes place like 'http://localhost:9200'
+  url_from: 'http://localhost:9200'
+
+  # name of new index like 'new-index'
+  new_name: "new_test"
+
+  # host where old index takes place like 'http://localhost:9200'
+  url_to: 'http://localhost:9200'
+
+  # add old aliases to new index or not
+  add_aliases: true
+
+  # save new index like JSON or not
+  save_like_json: true

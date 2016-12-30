@@ -1,57 +1,59 @@
-require 'elasticsearch'
 require 'json'
+require 'yaml'
+require './dfs.rb'
 
-save_like_json = true
-url_from = 'http://localhost:9200'
-url_to = 'http://localhost:9201'
-old_name = "pokedex"
-new_name = "new_pokedex"
-add_aliases = true
+# loading of parameters of script's setting
+config = YAML.load_file('./config.yaml')
+
+# add setting to variable
+save_like_json = config["config"]["save_like_json"]
+url_from = config["config"]["url_from"]
+url_to = config["config"]["url_to"]
+old_name = config["config"]["old_name"]
+new_name = config["config"]["new_name"]
+add_aliases = config["config"]["add_aliases"]
 
 # Connect to elasticsearch from url
-client_from = Elasticsearch::Client.new url: url_from
-client_to = Elasticsearch::Client.new url: url_to
+client_from = Elasticsearch::Client.new(url: url_from)
+client_to = Elasticsearch::Client.new(url: url_to)
 
-# get index and information about index from client
-# if there is some error it put message error
-# index is hash with hashes aliases, mappings, settings
-old_index = client_from.indices.get(index: old_name)[old_name]
 
-# create new index
+# CREATE WITH SETTING
+# create new index with setting of old index
+# use DateTime like time stamp with format YYYYMMDDHHMMSS
 time_stamp = DateTime.now.strftime("%Y%m%d%H%M%S")
-client_to.indices.create index: "#{new_name}_#{time_stamp}"
+new_name_with_time = "#{new_name}_#{time_stamp}"
+old_setting = client_from.indices.get_settings(index: old_name)[old_name]["settings"]
+client_from.indices.create( index: new_name_with_time, body: old_setting )
 
-# add alieases
+# MAPPING
+# change mapping from 2.x to 5.x and add to new_index
+# 1. string -> text / keywords
+# 2. index: no / not_analyzed / analyzed -> false / true / true (expect index belongs to string)
+# it use class DFS in dfs.rb
+mapping = client_from.indices.get_mapping(index: old_name)[old_name]["mappings"]
+DFS.new.dfs(mapping, false)
+mapping.keys.each do |type|
+  client_to.indices.put_mapping(index: new_name_with_time, type: type, body: mapping[type])
+end
+
+
+# ALIASES
+# add alieases (because there are hash use each and add name (key) and body (value))
 if add_aliases
-  old_index["aliases"].each do |name_alias|
-    client_to.indices.put_alias index: "#{new_name}_#{time_stamp}", name:name_alias, body: old_index["aliases"][name_alias]
+  # get aliases of old index from web
+  aliases = client_from.indices.get_aliases(index: old_name)[old_name]["aliases"]
+  # add aliases to new index
+  aliases.each do |name_alias|
+    client_to.indices.put_alias( index: new_name_with_time, name: name_alias, body: aliases[name_alias])
   end
 end
 
-# mapping
-# string + not_analyzed -> keyword + index: true
-# string + analyzed -> text + index: true
-
+# SAVE LIKE JSON
 # save properties of new index like json
 if save_like_json
-  File.open("#{new_name}_#{time_stamp}.json","w") do |f|
-    f.write(old_index.to_json)
-  end
-end
-
-# save data from old index like json
-if save_like_json
-  File.open("#{old_name}-data.json","w") do |f|
-    i = 1
-    pom_hash = {} # save data about index
-    pom_hash["_index"] = old_name
-    
-    while(i < client_from.count["count"])
-      pom_hash["_type"] = client_from.get( index: old_name, id: i)["_type"]
-      pom_hash["_id"] = client_from.get( index: old_name, id: i)["_id"]
-      f.puts( {"index" => pom_hash}.to_json)
-      f.puts(client_from.get_source( index: old_name, id: i).to_json)
-      i = i+1
-    end
-  end
+  # get new index from web
+  new_index = client_from.indices.get(index: new_name_with_time)[new_name_with_time]
+  # write to file with name of new index and time stamp
+  File.write("#{new_name_with_time}.json", new_index.to_json)
 end
